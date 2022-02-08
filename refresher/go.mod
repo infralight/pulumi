@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-lambda-go v1.28.0
 	github.com/aws/aws-sdk-go v1.42.33
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/infralight/go-kit v1.16.0
+	github.com/infralight/go-kit v1.17.0
 	github.com/pulumi/pulumi/pkg/v3 v3.0.0-00010101000000-000000000000
 	github.com/pulumi/pulumi/sdk/v3 v3.23.2
 	github.com/rs/zerolog v1.26.1
