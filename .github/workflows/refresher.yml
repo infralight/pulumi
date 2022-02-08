@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Configure git for private modules
-        run: git config --global url."https://${{ secrets.GLOBAL_PAT }}:x-oauth-basic@github.com".insteadOf "https://github.com"
+        run: git config --global url."https://${{ secrets.PAT }}:x-oauth-basic@github.com".insteadOf "https://github.com"
       - name: Configure AWS credentials for staging
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -27,7 +27,7 @@ jobs:
       - name: Build and push image to staging
         env:
           GOPRIVATE: "github.com/infralight/*"
-        run: make docker-build tag-version publish-version GIT_HASH=${GITHUB_SHA::6}  IMG=094724549126.dkr.ecr.us-west-2.amazonaws.com/pulumi_mapper ACCESS_TOKEN_USR=${{ secrets.ACCESS_TOKEN_USER }}-infralight ACCESS_TOKEN_PWD=${{ secrets.GLOBAL_PAT }}
+        run: make docker-build tag-version publish-version GIT_HASH=${GITHUB_SHA::6}  IMG=094724549126.dkr.ecr.us-west-2.amazonaws.com/pulumi_mapper ACCESS_TOKEN_USR=${{ secrets.ACCESS_TOKEN_USER }}-infralight ACCESS_TOKEN_PWD=${{ secrets.PAT }}
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         env:
@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Configure git for private modules
-        run: git config --global url."https://${{ secrets.GLOBAL_PAT }}:x-oauth-basic@github.com".insteadOf "https://github.com"
+        run: git config --global url."https://${{ secrets.PAT }}:x-oauth-basic@github.com".insteadOf "https://github.com"
       - name: Configure AWS credentials for staging
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -56,7 +56,7 @@ jobs:
       - name: Build and push image to Prod
         env:
           GOPRIVATE: "github.com/infralight/*"
-        run: make docker-build tag-version publish GIT_HASH=${GITHUB_SHA::6}  IMG=094724549126.dkr.ecr.us-east-1.amazonaws.com/pulumi_mapper ACCESS_TOKEN_USR=${{ secrets.ACCESS_TOKEN_USER }}-infralight ACCESS_TOKEN_PWD=${{ secrets.GLOBAL_PAT }}
+        run: make docker-build tag-version publish GIT_HASH=${GITHUB_SHA::6}  IMG=094724549126.dkr.ecr.us-east-1.amazonaws.com/pulumi_mapper ACCESS_TOKEN_USR=${{ secrets.ACCESS_TOKEN_USER }}-infralight ACCESS_TOKEN_PWD=${{ secrets.PAT }}
       - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         if: always()
