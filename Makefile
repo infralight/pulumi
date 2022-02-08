@@ -1,5 +1,5 @@
 
-IMG ?= opa_calculator
+IMG ?= pulumi_mapper
 ACCESS_TOKEN_USR ?= nothing
 ACCESS_TOKEN_PWD ?= nothing
 
