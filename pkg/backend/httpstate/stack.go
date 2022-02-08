@@ -214,3 +214,5 @@ func (css CloudStackSummary) LastUpdate() *time.Time {
 func (css CloudStackSummary) ResourceCount() *int {
 	return css.Summary.ResourceCount
 }
+
+
