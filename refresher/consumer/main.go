@@ -30,7 +30,7 @@ func init() {
 	}
 
 	// Load aws credentials
-	sess = config.LoadAwsSession()
+	sess = cfg.LoadAwsSession()
 
 	consumer, err = common.NewConsumer(cfg)
 	if err != nil {

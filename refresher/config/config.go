@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pulumi/pulumi/pkg/v3/backend/httpstate"
@@ -27,6 +28,9 @@ type Config struct {
 	StackId                string
 	ResourceCount          int
 	LastUpdate             int
+	FireflyAWSAccessKey    string
+	FireflyAWSSecretKey    string
+	FireflyAWSSessionToken string
 }
 
 func LoadConfig() (*Config, error) {
@@ -92,36 +96,49 @@ func LoadConfig() (*Config, error) {
 		merr = multierror.Append(merr, errors.New("failed, environment variable STACK_ID must be provided"))
 	}
 
+	if cfg.FireflyAWSAccessKey = os.Getenv("FIREFLY_AWS_ACCESS_KEY_ID"); cfg.FireflyAWSAccessKey == "" {
+		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_ACCESS_KEY_ID must be provided"))
+	}
+
+	if cfg.FireflyAWSSecretKey = os.Getenv("FIREFLY_AWS_SECRET_ACCESS_KEY"); cfg.StackId == "" {
+		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_SECRET_ACCESS_KEY must be provided"))
+	}
+
+	if cfg.FireflyAWSSessionToken = os.Getenv("FIREFLY_AWS_SESSION_TOKEN"); cfg.StackId == "" {
+		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_SESSION_TOKEN must be provided"))
+	}
+
 	cfg.ResourceCount, err = strconv.Atoi(os.Getenv("RESOURCE_COUNT"))
 	if err != nil {
 		merr = multierror.Append(merr, errors.New("failed, environment variable RESOURCE_COUNT must be provided"))
 	}
 
 	cfg.LastUpdate, err = strconv.Atoi(os.Getenv("LAST_UPDATE"))
-		if err != nil {
-			merr = multierror.Append(merr, errors.New("failed, environment variable LAST_UPDATE must be provided"))
-		}
-
-
+	if err != nil {
+		merr = multierror.Append(merr, errors.New("failed, environment variable LAST_UPDATE must be provided"))
+	}
 
 	return cfg, merr.ErrorOrNil()
 }
 
-func LoadAwsSession() *session.Session {
-	config := aws.Config{}
+func (cfg *Config) LoadAwsSession() *session.Session {
+	config := aws.NewConfig().
+		WithCredentials(credentials.NewStaticCredentialsFromCreds(credentials.Value{
+			AccessKeyID:     cfg.FireflyAWSAccessKey,
+			SecretAccessKey: cfg.FireflyAWSSessionToken,
+			SessionToken:    cfg.FireflyAWSSessionToken,
+		}))
 	region := os.Getenv("AWS_REGION")
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
 	}
 
 	if region != "" {
-		config = aws.Config{
-			Region: aws.String(region),
-		}
+		config.WithRegion(region)
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		Config:            config,
+		Config:            *config,
 		SharedConfigState: session.SharedConfigEnable,
 	}))
 
