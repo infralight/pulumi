@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func pulumiMapper(
+func PulumiMapper(
 	ctx context.Context,
 	logger *zerolog.Logger,
 	consumer *common.Consumer,
