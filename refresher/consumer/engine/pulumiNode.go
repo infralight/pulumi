@@ -57,10 +57,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					}
 					s3Node["region"] = region
 				} else {
-					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
 						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
 						Msg("no arn for resource")
+					continue
 				}
 				s3Node["attributes"] = getIacAttributes(newState.Outputs)
 				s3Nodes = append(s3Nodes, s3Node)
@@ -82,10 +83,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					}
 					s3Node["region"] = region
 				} else {
-					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
 						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
 						Msg("no arn for resource")
+					continue
 				}
 				s3Node["attributes"] = getIacAttributes(oldState.Outputs)
 				s3Nodes = append(s3Nodes, s3Node)
@@ -111,10 +113,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					}
 					s3Node["region"] = region
 				} else {
-					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
 						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
 						Msg("no arn for resource")
+					continue
 				}
 				s3Node["attributes"] = getIacAttributes(newState.Outputs)
 
