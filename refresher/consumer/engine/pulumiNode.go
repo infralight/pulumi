@@ -10,6 +10,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/resource/deploy"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/rs/zerolog"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,10 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		iacMetadata["projectName"] = projectName
 		iacMetadata["organizationName"] = organizationName
 		iacMetadata["pulumiType"] = metadata.Type.String()
+
+		if !strings.HasPrefix(metadata.Type.String(), "aws:") {
+			continue
+		}
 
 		s3Node["stackId"] = stackId
 		s3Node["iac"] = "pulumi"
