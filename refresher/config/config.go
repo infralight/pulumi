@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pulumi/pulumi/pkg/v3/backend/httpstate"
 	"os"
@@ -154,13 +153,6 @@ func (cfg *Config) LoadAwsSession() *session.Session {
 		Config:            *config,
 		SharedConfigState: session.SharedConfigEnable,
 	}))
-
-	res, err := sts.New(sess, config).GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil
-	}
-
-	fmt.Printf(res.String())
 
 	return sess
 }
