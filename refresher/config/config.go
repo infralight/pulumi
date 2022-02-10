@@ -4,13 +4,21 @@ import (
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/hashicorp/go-multierror"
 	"github.com/pulumi/pulumi/pkg/v3/backend/httpstate"
 	"os"
 	"strconv"
 )
+
+var PULUMI_AWS_CREDS_ENVS = []string{
+	"AWS_ACCESS_KEY_ID",
+	"AWS_ACCESS_KEY",
+	"AWS_SECRET_ACCESS_KEY",
+	"AWS_SECRET_KEY",
+	"AWS_SESSION_TOKEN",
+}
 
 type Config struct {
 	RunImmediately         bool
@@ -28,11 +36,10 @@ type Config struct {
 	StackId                string
 	ResourceCount          int
 	LastUpdate             int
-	FireflyAWSAccessKey    string
-	FireflyAWSSecretKey    string
-	FireflyAWSSessionToken string
 	FireflyEngineLambdaArn string
 	ClientAWSIntegrationId string
+	FireflyAWSRoleARN          string
+	FireflyAWSWebIdentityToken string
 }
 
 func LoadConfig() (*Config, error) {
@@ -98,17 +105,17 @@ func LoadConfig() (*Config, error) {
 		merr = multierror.Append(merr, errors.New("failed, environment variable STACK_ID must be provided"))
 	}
 
-	if cfg.FireflyAWSAccessKey = os.Getenv("FIREFLY_AWS_ACCESS_KEY_ID"); cfg.FireflyAWSAccessKey == "" {
-		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_ACCESS_KEY_ID must be provided"))
+	if cfg.FireflyAWSRoleARN = os.Getenv("AWS_ROLE_ARN"); cfg.FireflyAWSRoleARN == "" {
+		merr = multierror.Append(merr, errors.New("failed, environment variable AWS_ROLE_ARN must be provided"))
 	}
 
-	if cfg.FireflyAWSSecretKey = os.Getenv("FIREFLY_AWS_SECRET_ACCESS_KEY"); cfg.FireflyAWSSecretKey == "" {
-		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_SECRET_ACCESS_KEY must be provided"))
+	if cfg.FireflyAWSWebIdentityToken = os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"); cfg.FireflyAWSWebIdentityToken == "" {
+		merr = multierror.Append(merr, errors.New("failed, environment variable AWS_WEB_IDENTITY_TOKEN_FILE must be provided"))
 	}
 
-	if cfg.FireflyAWSSessionToken = os.Getenv("FIREFLY_AWS_SESSION_TOKEN"); cfg.FireflyAWSSessionToken == "" {
-		merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_SESSION_TOKEN must be provided"))
-	}
+	//if cfg.FireflyAWSSessionToken = os.Getenv("FIREFLY_AWS_SESSION_TOKEN"); cfg.FireflyAWSSessionToken == "" {
+	//	merr = multierror.Append(merr, errors.New("failed, environment variable FIREFLY_AWS_SESSION_TOKEN must be provided"))
+	//}
 
 	if cfg.FireflyEngineLambdaArn = os.Getenv("ENGINE_PRODUCER_LAMBDA_ARN"); cfg.FireflyEngineLambdaArn == "" {
 		merr = multierror.Append(merr, errors.New("failed, environment variable ENGINE_PRODUCER_LAMBDA_ARN must be provided"))
@@ -132,12 +139,12 @@ func LoadConfig() (*Config, error) {
 }
 
 func (cfg *Config) LoadAwsSession() *session.Session {
-	config := aws.NewConfig().
-		WithCredentials(credentials.NewStaticCredentialsFromCreds(credentials.Value{
-			AccessKeyID:     cfg.FireflyAWSAccessKey,
-			SecretAccessKey: cfg.FireflyAWSSecretKey,
-			SessionToken:    cfg.FireflyAWSSessionToken,
-		}))
+	// We clear the static AWS credentials of the AWS pulumi integration in order to use the web token identity
+	for _, env := range PULUMI_AWS_CREDS_ENVS {
+		os.Unsetenv(env)
+	}
+
+	config := aws.NewConfig()
 	region := os.Getenv("AWS_REGION")
 	if region == "" {
 		region = os.Getenv("AWS_DEFAULT_REGION")
@@ -151,6 +158,13 @@ func (cfg *Config) LoadAwsSession() *session.Session {
 		Config:            *config,
 		SharedConfigState: session.SharedConfigEnable,
 	}))
+
+	res, err := sts.New(sess, config).GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return nil
+	}
+
+	fmt.Printf(res.String())
 
 	return sess
 }

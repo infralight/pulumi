@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/config"
 	"github.com/infralight/pulumi/refresher/consumer/engine"
@@ -15,7 +14,6 @@ var (
 	cfg       *config.Config
 	consumer  *common.Consumer
 	logger    zerolog.Logger
-	sess      *session.Session
 	component = "pulumi-mapper-consumer"
 )
 
@@ -27,9 +25,6 @@ func init() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to load configuration from environment variables")
 	}
-
-	// Load aws credentials
-	sess = cfg.LoadAwsSession()
 
 	consumer, err = common.NewConsumer(cfg)
 	if err != nil {
@@ -50,7 +45,7 @@ func init() {
 func handler(ctx context.Context) (string, error) {
 	lastUpdate := int64(cfg.LastUpdate)
 	resourceCount := cfg.ResourceCount
-	err := engine.PulumiMapper(ctx, &logger, consumer, cfg.AccountId, cfg.PulumiIntegrationId, cfg.StackName, cfg.ProjectName, cfg.OrganizationName, cfg.StackId, &lastUpdate, &resourceCount )
+	err := engine.PulumiMapper(ctx, &logger, consumer, cfg.AccountId, cfg.PulumiIntegrationId, cfg.StackName, cfg.ProjectName, cfg.OrganizationName, cfg.StackId, &lastUpdate, &resourceCount)
 	if err != nil {
 		return "failed", err
 	}
