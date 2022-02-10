@@ -52,7 +52,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				s3Node["metadata"] = iacMetadata
 				if ARN := newState.Outputs["arn"].V; ARN != nil {
 					s3Node["arn"] = ARN
-					region, err := getRegionFromArn(fmt.Sprintf("%v", ARN))
+					awsAccount, region, err := getAccountAndRegionFromArn(fmt.Sprintf("%v", ARN))
 					if err != nil {
 						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 							Str("projectName", projectName).Str("stackName", stackName).
@@ -61,6 +61,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 						continue
 					}
 					s3Node["region"] = region
+					s3Node["providerAccountId"] = awsAccount
 				} else {
 					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
@@ -78,7 +79,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				s3Node["metadata"] = iacMetadata
 				if ARN := oldState.Outputs["arn"].V; ARN != nil {
 					s3Node["arn"] = ARN
-					region, err := getRegionFromArn(fmt.Sprintf("%v", ARN))
+					awsAccount, region, err := getAccountAndRegionFromArn(fmt.Sprintf("%v", ARN))
 					if err != nil {
 						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 							Str("projectName", projectName).Str("stackName", stackName).
@@ -87,6 +88,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 						continue
 					}
 					s3Node["region"] = region
+					s3Node["providerAccountId"] = awsAccount
 				} else {
 					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
@@ -108,7 +110,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				s3Node["metadata"] = iacMetadata
 				if ARN := newState.Outputs["arn"].V; ARN != nil {
 					s3Node["arn"] = ARN
-					region, err := getRegionFromArn(fmt.Sprintf("%v", ARN))
+					awsAccount, region, err := getAccountAndRegionFromArn(fmt.Sprintf("%v", ARN))
 					if err != nil {
 						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 							Str("projectName", projectName).Str("stackName", stackName).
@@ -117,6 +119,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 						continue
 					}
 					s3Node["region"] = region
+					s3Node["providerAccountId"] = awsAccount
 				} else {
 					logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
 						Str("projectName", projectName).Str("stackName", stackName).
@@ -145,16 +148,16 @@ func getSameMetadata(event engine.Event) engine.StepEventMetadata {
 	return metadata
 }
 
-func getRegionFromArn(assetArn string) (region string, err error) {
+func getAccountAndRegionFromArn(assetArn string) (account, region string, err error) {
 	parsedArn, err := arn.Parse(assetArn)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	region = parsedArn.Location
 	if region == "" {
 		region = "global"
 	}
-	return region, nil
+	return parsedArn.AccountID, region, nil
 }
 
 func getIacAttributes(outputs resource.PropertyMap) string {
