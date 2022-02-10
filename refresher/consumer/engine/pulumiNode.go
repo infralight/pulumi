@@ -13,8 +13,7 @@ import (
 	"time"
 )
 
-
-func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger,) (result []map[string]interface{}, err error) {
+func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger) (result []map[string]interface{}, err error) {
 
 	var s3Nodes = make([]map[string]interface{}, 0, len(events))
 
@@ -40,69 +39,94 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			s3Node["objectType"] = terraformType
 		}
 
-
 		switch metadata.Op {
 		case deploy.OpSame:
 			newState := *metadata.New
 			if len(newState.Outputs) > 0 {
 				iacMetadata["pulumiState"] = "managed"
 				s3Node["metadata"] = iacMetadata
-				s3Node["arn"] = newState.Outputs["arn"].V
-				region, err := getRegionFromArn(s3Node["arn"].(string))
-				if err != nil {
-					logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
-						Str("stackName", stackName).Str("OrganizationName", organizationName).Str("arn",s3Node["arn"].(string) ).Msg("failed to parse arn")
-					continue
+				if ARN := newState.Outputs["arn"].V; ARN != nil {
+					s3Node["arn"] = ARN
+					region, err := getRegionFromArn(s3Node["arn"].(string))
+					if err != nil {
+						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+							Str("projectName", projectName).Str("stackName", stackName).
+							Str("OrganizationName", organizationName).Interface("arn", ARN).
+							Msg("failed to parse arn")
+						continue
+					}
+					s3Node["region"] = region
+				} else {
+					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+						Str("projectName", projectName).Str("stackName", stackName).
+						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
+						Msg("no arn for resource")
 				}
-				s3Node["region"] = region
 				s3Node["attributes"] = getIacAttributes(newState.Outputs)
 				s3Nodes = append(s3Nodes, s3Node)
 			}
-			case deploy.OpDelete:
+		case deploy.OpDelete:
 			oldState := *metadata.Old
 			if len(oldState.Outputs) > 0 {
 				iacMetadata["pulumiState"] = "ghost"
 				s3Node["metadata"] = iacMetadata
-				s3Node["arn"] = oldState.Outputs["arn"].V
-				region, err := getRegionFromArn(s3Node["arn"].(string))
-				if err != nil {
-					logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
-						Str("stackName", stackName).Str("OrganizationName", organizationName).Str("arn",s3Node["arn"].(string) ).Msg("failed to parse arn")
-					continue
+				if ARN := oldState.Outputs["arn"].V; ARN != nil {
+					s3Node["arn"] = ARN
+					region, err := getRegionFromArn(s3Node["arn"].(string))
+					if err != nil {
+						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+							Str("projectName", projectName).Str("stackName", stackName).
+							Str("OrganizationName", organizationName).Interface("arn", ARN).
+							Msg("failed to parse arn")
+						continue
+					}
+					s3Node["region"] = region
+				} else {
+					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+						Str("projectName", projectName).Str("stackName", stackName).
+						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
+						Msg("no arn for resource")
 				}
-				s3Node["region"] = region
 				s3Node["attributes"] = getIacAttributes(oldState.Outputs)
 				s3Nodes = append(s3Nodes, s3Node)
 
 			}
-			case deploy.OpUpdate:
-				newState := *metadata.New
-				if len(newState.Outputs) > 0 {
-					drifts := refresher.CalcDrift(metadata)
-					iacMetadata["pulumiState"] = "modified"
-					iacMetadata["pulumiDrifts"] = drifts
+		case deploy.OpUpdate:
+			newState := *metadata.New
+			if len(newState.Outputs) > 0 {
+				drifts := refresher.CalcDrift(metadata)
+				iacMetadata["pulumiState"] = "modified"
+				iacMetadata["pulumiDrifts"] = drifts
 
-					s3Node["metadata"] = iacMetadata
-					s3Node["arn"] = newState.Outputs["arn"].V
+				s3Node["metadata"] = iacMetadata
+				if ARN := newState.Outputs["arn"].V; ARN != nil {
+					s3Node["arn"] = ARN
 					region, err := getRegionFromArn(s3Node["arn"].(string))
 					if err != nil {
-						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
-							Str("stackName", stackName).Str("OrganizationName", organizationName).Str("arn",s3Node["arn"].(string) ).Msg("failed to parse arn")
+						logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+							Str("projectName", projectName).Str("stackName", stackName).
+							Str("OrganizationName", organizationName).Interface("arn", ARN).
+							Msg("failed to parse arn")
 						continue
 					}
 					s3Node["region"] = region
-					s3Nodes = append(s3Nodes, s3Node)
-
-
-					s3Node["attributes"] = getIacAttributes(newState.Outputs)
+				} else {
+					logger.Fatal().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
+						Str("projectName", projectName).Str("stackName", stackName).
+						Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
+						Msg("no arn for resource")
 				}
+				s3Node["attributes"] = getIacAttributes(newState.Outputs)
+
+				s3Nodes = append(s3Nodes, s3Node)
+			}
 		}
 
 	}
 	return s3Nodes, nil
 }
 
-func getSameMetadata(event engine.Event)  engine.StepEventMetadata {
+func getSameMetadata(event engine.Event) engine.StepEventMetadata {
 	var metadata engine.StepEventMetadata
 	if event.Type == engine.ResourcePreEvent {
 		metadata = event.Payload().(engine.ResourcePreEventPayload).Metadata
@@ -114,7 +138,7 @@ func getSameMetadata(event engine.Event)  engine.StepEventMetadata {
 }
 
 func getRegionFromArn(assetArn string) (region string, err error) {
-	parsedArn,err := arn.Parse(assetArn)
+	parsedArn, err := arn.Parse(assetArn)
 	if err != nil {
 		return "", err
 	}
