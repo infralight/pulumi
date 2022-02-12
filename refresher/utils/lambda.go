@@ -14,6 +14,7 @@ func TriggerFireflyEngine(cfg *config.Config) error {
 	payload, err := json.Marshal(map[string]interface{}{
 		"accountId":     cfg.AccountId,
 		"integrationId": cfg.ClientAWSIntegrationId,
+		"provider": "aws",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal engine event payload: %v", err)
