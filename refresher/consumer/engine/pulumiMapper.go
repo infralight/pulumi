@@ -94,8 +94,8 @@ func PulumiMapper(
 	//		Str("stackName", stackName).Str("OrganizationName", organizationName).Msg("failed to trigger engine producer")
 	//	return err
 	//}
-	logger.Info().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
-		Str("stackName", stackName).Str("OrganizationName", organizationName).Msg("Successfully triggered engine producer")
+	//logger.Info().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
+	//	Str("stackName", stackName).Str("OrganizationName", organizationName).Msg("Successfully triggered engine producer")
 	return nil
 
 }
