@@ -43,6 +43,7 @@ func InvokeEngineLambda(cfg *config.Config, assetTypes []string, logger *zerolog
 			"accountId":     cfg.AccountId,
 			"integrationId": cfg.ClientAWSIntegrationId,
 		}
+		logger.Info().Str("assetType", asset).Str("accountId", cfg.AccountId).Str("awsIntegrationId", cfg.ClientAWSIntegrationId).Msg("invoking engine")
 		err := goKit.InvokeLambdaAsync(cfg.FireflyEngineLambdaArn, payload, awsSession)
 		if err != nil {
 			logger.Err(err).Str("assetType", asset).Str("accountId", cfg.AccountId).Str("awsIntegrationId", cfg.ClientAWSIntegrationId).Msg("failed to invoke firefly engine producer")
