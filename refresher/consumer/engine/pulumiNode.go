@@ -205,11 +205,13 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		}
 
 	}
-	k8sNodes, err = buildK8sArns(k8sNodes, accountId, uids, kinds, config, logger)
-	if err != nil {
-		logger.Err(err).Msg("failed to build k8s arns")
+	if len(k8sNodes) > 0 {
+		k8sNodes, err = buildK8sArns(k8sNodes, accountId, uids, kinds, config, logger)
+		if err != nil {
+			logger.Err(err).Msg("failed to build k8s arns")
+		}
+		s3Nodes = append(s3Nodes, k8sNodes...)
 	}
-	s3Nodes = append(s3Nodes, k8sNodes...)
 	return s3Nodes, assetTypes, nil
 }
 
