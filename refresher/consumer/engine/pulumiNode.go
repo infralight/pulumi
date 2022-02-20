@@ -10,6 +10,7 @@ import (
 	k8sUtils "github.com/infralight/go-kit/k8s"
 	goKit "github.com/infralight/go-kit/pulumi"
 	goKitTypes "github.com/infralight/go-kit/types"
+	k8sApiUtils "github.com/infralight/k8s-api/pkg/utils"
 	"github.com/infralight/pulumi/refresher"
 	"github.com/infralight/pulumi/refresher/config"
 	"github.com/infralight/pulumi/refresher/utils"
@@ -83,7 +84,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"] = getIacAttributes(newState.Outputs, nil)
+					s3Node["attributes"], err = getIacAttributes(newState.Outputs, nil)
+					if err != nil {
+						logger.Err(err).Msg("failed to get iac attributes")
+						continue
+					}
 					s3Nodes = append(s3Nodes, s3Node)
 				}
 			case deploy.OpDelete:
@@ -110,7 +115,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"] = getIacAttributes(oldState.Outputs, nil)
+					s3Node["attributes"], err = getIacAttributes(oldState.Outputs, nil)
+					if err != nil {
+						logger.Err(err).Msg("failed to get iac attributes")
+						continue
+					}
 					s3Nodes = append(s3Nodes, s3Node)
 
 				}
@@ -149,7 +158,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"] = getIacAttributes(newState.Outputs, nil)
+					s3Node["attributes"], err = getIacAttributes(newState.Outputs, nil)
+					if err != nil {
+						logger.Err(err).Msg("failed to get iac attributes")
+						continue
+					}
 
 					s3Nodes = append(s3Nodes, s3Node)
 				}
@@ -160,7 +173,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			var uid string
 			newState := *metadata.New
 			s3Node["metadata"] = iacMetadata
-			s3Node["attributes"] = getIacAttributes(newState.Outputs,  []string{"status", "__inputs", "__initialApiVersion"})
+			s3Node["attributes"], err = getIacAttributes(newState.Outputs,  []string{"status", "__inputs", "__initialApiVersion"})
+			if err != nil {
+				logger.Err(err).Msg("failed to get iac attributes")
+				continue
+			}
 			if resourceMetadata := newState.Outputs["metadata"].Mappable(); resourceMetadata != nil {
 				namespace := funk.Get(resourceMetadata, "namespace")
 				name := funk.Get(resourceMetadata, "name")
@@ -239,7 +256,7 @@ func getAccountAndRegionFromArn(assetArn string) (account, region string, err er
 	return parsedArn.AccountID, region, nil
 }
 
-func getIacAttributes(outputs resource.PropertyMap, blackList []string) string {
+func getIacAttributes(outputs resource.PropertyMap, blackList []string) (string, error) {
 	// in case we want k8s attributes we use blacklist for redundant attributes
 	iacAttributes := make(map[string]interface{})
 	for key, val := range outputs {
@@ -248,12 +265,25 @@ func getIacAttributes(outputs resource.PropertyMap, blackList []string) string {
 			iacAttributes[stringKey] = val.Mappable()
 		}
 	}
+	if metadata, err := k8sApiUtils.GetMapFromMap(iacAttributes, "metadata"); err == nil {
+		_ = k8sApiUtils.ConvertItemToYaml(metadata, "managedFields")
 
+	} else {
+		return "",  errors.New("failed to get metadata")
+	}
+
+	if data, err := k8sApiUtils.GetMapFromMap(iacAttributes, "data"); err == nil {
+		if dataSpec, err := k8sApiUtils.GetMapFromMap(data, "spec"); err == nil {
+			if err = k8sApiUtils.ConvertItemToYaml(dataSpec, "template"); err != nil {
+				return "",  errors.New("failed to find or to yaml template")
+			}
+		}
+	}
 	attributesBytes, err := json.Marshal(&iacAttributes)
 	if err != nil {
-		return ""
+		return "",  errors.New("failed to find or to marshal attributes")
 	}
-	return string(attributesBytes)
+	return string(attributesBytes), nil
 }
 
 func getStringMetadata(metadata map[string]interface{}) string {
