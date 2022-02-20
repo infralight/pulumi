@@ -84,11 +84,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"], err = getIacAttributes(newState.Outputs, nil)
-					if err != nil {
-						logger.Err(err).Msg("failed to get iac attributes")
-						continue
-					}
+					s3Node["attributes"] = getIacAttributes(newState.Outputs)
 					s3Nodes = append(s3Nodes, s3Node)
 				}
 			case deploy.OpDelete:
@@ -115,11 +111,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"], err = getIacAttributes(oldState.Outputs, nil)
-					if err != nil {
-						logger.Err(err).Msg("failed to get iac attributes")
-						continue
-					}
+					s3Node["attributes"] = getIacAttributes(oldState.Outputs)
 					s3Nodes = append(s3Nodes, s3Node)
 
 				}
@@ -158,12 +150,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 							Msg("no arn for resource")
 						continue
 					}
-					s3Node["attributes"], err = getIacAttributes(newState.Outputs, nil)
-					if err != nil {
-						logger.Err(err).Msg("failed to get iac attributes")
-						continue
-					}
-
+					s3Node["attributes"] = getIacAttributes(newState.Outputs)
 					s3Nodes = append(s3Nodes, s3Node)
 				}
 			}
@@ -173,7 +160,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			var uid string
 			newState := *metadata.New
 			s3Node["metadata"] = iacMetadata
-			s3Node["attributes"], err = getIacAttributes(newState.Outputs,  []string{"status", "__inputs", "__initialApiVersion"})
+			s3Node["attributes"], err = getK8sIacAttributes(newState.Outputs,  []string{"status", "__inputs", "__initialApiVersion"})
 			if err != nil {
 				logger.Err(err).Msg("failed to get iac attributes")
 				continue
@@ -256,7 +243,7 @@ func getAccountAndRegionFromArn(assetArn string) (account, region string, err er
 	return parsedArn.AccountID, region, nil
 }
 
-func getIacAttributes(outputs resource.PropertyMap, blackList []string) (string, error) {
+func getK8sIacAttributes(outputs resource.PropertyMap, blackList []string) (string, error) {
 	// in case we want k8s attributes we use blacklist for redundant attributes
 	iacAttributes := make(map[string]interface{})
 	for key, val := range outputs {
@@ -286,12 +273,18 @@ func getIacAttributes(outputs resource.PropertyMap, blackList []string) (string,
 	return string(attributesBytes), nil
 }
 
-func getStringMetadata(metadata map[string]interface{}) string {
-	metadataBytes, err := json.Marshal(&metadata)
+func getIacAttributes(outputs resource.PropertyMap) string {
+	iacAttributes := make(map[string]interface{})
+	for key, val := range outputs {
+		stringKey := fmt.Sprintf("%v", key)
+		iacAttributes[stringKey] = val.Mappable()
+	}
+
+	attributesBytes, err := json.Marshal(&iacAttributes)
 	if err != nil {
 		return ""
 	}
-	return string(metadataBytes)
+	return string(attributesBytes)
 }
 
 func buildK8sArns(k8sNodes []map[string]interface{}, accountId string, uids, kinds []string, cfg *config.Config, logger *zerolog.Logger) ([]map[string]interface{}, error) {
