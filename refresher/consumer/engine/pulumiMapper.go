@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"github.com/infralight/pulumi/refresher"
 	"github.com/infralight/pulumi/refresher/common"
+	"github.com/infralight/pulumi/refresher/config"
 	"github.com/infralight/pulumi/refresher/utils"
 	"github.com/pulumi/pulumi/pkg/v3/backend/httpstate"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/rs/zerolog"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func PulumiMapper(
@@ -46,7 +48,10 @@ func PulumiMapper(
 	}
 
 	stack, err := httpBackend.GetStack(client.Ctx, stackRef.Name())
-
+	if err != nil || stack == nil{
+		logger.Err(err).Str("accountId", accountId).Str("stackId", stackId).Msg("failed getting stack")
+		return updateStateFileDeleted(ctx, consumer.Config, accountId, stackId)
+	}
 	updateOpts := client.GetUpdateOpts()
 
 	dryRunApplierOpts := client.GetDryRunApplierOpts()
@@ -67,6 +72,11 @@ func PulumiMapper(
 
 	httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
 	close(eventsChannel)
+
+	if len(events) <= 1 {
+		logger.Info().Str("accountId", accountId).Str("stackId", stackId).Msg("found empty state file")
+		return updateEmptyStateFile(ctx, consumer.Config, accountId, stackId)
+	}
 	nodes, assetTypes, err := CreatePulumiNodes(events, accountId, stackId, integrationId, stackName, projectName, organizationName, logger, consumer.Config)
 
 	jsonlinesNodes, err := utils.ToJsonLines(nodes)
@@ -98,4 +108,14 @@ func PulumiMapper(
 		Str("stackName", stackName).Str("OrganizationName", organizationName).Msg("Successfully triggered engine producer")
 	return nil
 
+}
+
+func updateEmptyStateFile(ctx context.Context, cfg *config.Config, accountId, stackId string)  error{
+	updates := bson.M{"metadata.fetchingStatus.stateFileEmpty": true}
+	return utils.UpdateStack(ctx, cfg, accountId, stackId, updates)
+}
+
+func updateStateFileDeleted(ctx context.Context, cfg *config.Config, accountId, stackId string)  error{
+	updates := bson.M{"metadata.fetchingStatus.stateFileDeleted": true}
+	return utils.UpdateStack(ctx, cfg, accountId, stackId, updates)
 }

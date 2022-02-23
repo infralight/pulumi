@@ -308,12 +308,15 @@ func buildK8sArns(k8sNodes []map[string]interface{}, accountId string, uids, kin
 		if namespace, ok := node["location"]; ok && namespace != nil {
 			node["arn"] = k8sUtils.BuildArn(goKitTypes.ToString(namespace), clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
 			node["assetId"] = k8sUtils.BuildArn(goKitTypes.ToString(namespace), clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
-			node["k8sIntegration"] = integrationIds[0]
+			if len(integrationIds) > 0 {
+				node["k8sIntegration"] = integrationIds[0]
+			}
 		} else {
 			node["arn"] = k8sUtils.BuildArn("", clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
 			node["assetId"] = k8sUtils.BuildArn("", clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
-			node["k8sIntegration"] = integrationIds[0]
-		}
+			if len(integrationIds) > 0 {
+				node["k8sIntegration"] = integrationIds[0]
+			}		}
 		return node
 	})
 	return k8sNodes, clusterId, nil
@@ -361,7 +364,7 @@ func handleAwsCommonProviders(ctx context.Context, accountId, stackId string, co
 				}
 			}
 			if awsIntegrationId, ok := awsIntegration["id"]; ok {
-				if awsIntegrationId != integrationId {
+				if awsIntegrationId != integrationId && integrationId != "" {
 					updateDict["integrations.aws.id"], err = primitive.ObjectIDFromHex(integrationId)
 					if err != nil {
 						return err
@@ -370,10 +373,12 @@ func handleAwsCommonProviders(ctx context.Context, accountId, stackId string, co
 			}
 		} else {
 			updateDict["integrations.aws.externalId"] = mostCommonProvider
-			updateDict["integrations.aws.id"] = integrationId
+			if integrationId != "" {
+				updateDict["integrations.aws.id"] = integrationId
+			}
 		}
 
-		if updateDict != nil {
+		if len(updateDict) != 0  {
 			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
 			err = utils.UpdateStack(ctx, config, accountId, stackId, updateDict)
 			if err != nil {
@@ -405,7 +410,7 @@ func handleK8sCommonProviders(ctx context.Context, accountId, stackId string, co
 				}
 			}
 			if k8sIntegrationId, ok := k8sIntegration["id"]; ok {
-				if k8sIntegrationId != integrationId {
+				if k8sIntegrationId != integrationId && integrationId != "" {
 					updateDict["integrations.k8s.id"], err = primitive.ObjectIDFromHex(integrationId)
 					if err != nil {
 						return err
@@ -414,10 +419,12 @@ func handleK8sCommonProviders(ctx context.Context, accountId, stackId string, co
 			}
 		} else {
 			updateDict["integrations.k8s.externalId"] = mostCommonProvider
-			updateDict["integrations.k8s.id"] = integrationId
+			if integrationId != "" {
+				updateDict["integrations.k8s.id"] = integrationId
+			}
 		}
 
-		if updateDict != nil {
+		if len(updateDict) != 0 {
 			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
 			err = utils.UpdateStack(ctx, config, accountId, stackId, updateDict)
 			if err != nil {
