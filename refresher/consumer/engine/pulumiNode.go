@@ -26,10 +26,10 @@ import (
 	"time"
 )
 
-func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger, config *config.Config) (result []map[string]interface{}, assetTypes []string, err error) {
+func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger, config *config.Config) (result []PulumiNode, assetTypes []string, err error) {
 
-	var s3Nodes = make([]map[string]interface{}, 0, len(events))
-	var k8sNodes = make([]map[string]interface{}, 0, len(events))
+	var nodes []PulumiNode
+	var k8sNodes []PulumiNode
 	var uids []string
 	var kinds []string
 	awsCommonProviders := make(map[string]int)
@@ -57,27 +57,26 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		var metadata = getSameMetadata(event)
 		var state engine.StepEventStateMetadata
 
-		var s3Node = make(map[string]interface{})
-		iacMetadata := make(map[string]interface{})
-		iacMetadata["stackId"] = stackId
-		iacMetadata["stackName"] = stackName
-		iacMetadata["projectName"] = projectName
-		iacMetadata["organizationName"] = organizationName
-		iacMetadata["pulumiType"] = metadata.Type.String()
-
-		s3Node["stackId"] = stackId
-		s3Node["iac"] = "pulumi"
-		s3Node["accountId"] = accountId
-		s3Node["integrationId"] = integrationId
-		s3Node["isOrchestrator"] = false
-		s3Node["updatedAt"] = time.Now().Unix()
+		var node PulumiNode
+		node.Metadata.StackId = stackId
+		node.Metadata.StackName = stackName
+		node.Metadata.ProjectName = projectName
+		node.Metadata.OrganizationName = organizationName
+		node.Metadata.PulumiType = metadata.Type.String()
+		node.StackId = stackId
+		node.Iac = "pulumi"
+		node.AccountId = accountId
+		node.PulumiIntegrationId = integrationId
+		node.IsOrchestrator = false
+		node.UpdatedAt = time.Now().Unix()
 
 		if strings.HasPrefix(metadata.Type.String(), "aws:") {
+			node.Type = "aws"
 			terraformType, err := goKit.GetTerraformTypeByPulumi(metadata.Type.String())
 			if err != nil {
 				logger.Warn().Str("pulumiAssetType", metadata.Type.String()).Msg("missing pulumi to terraform type mapping")
 			} else {
-				s3Node["objectType"] = terraformType
+				node.ObjectType = terraformType
 				if !helpers.StringSliceContains(assetTypes, terraformType) {
 					assetTypes = append(assetTypes, terraformType)
 				}
@@ -86,10 +85,10 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			switch metadata.Op {
 			case deploy.OpSame:
 				state = *metadata.New
-				iacMetadata["pulumiState"] = "managed"
+				node.Metadata.PulumiState = "managed"
 			case deploy.OpDelete:
 				state = *metadata.Old
-				iacMetadata["pulumiState"] = "ghost"
+				node.Metadata.PulumiState = "ghost"
 			case deploy.OpUpdate:
 				state = *metadata.New
 				drifts, err := refresher.CalcDrift(metadata)
@@ -97,23 +96,21 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					logger.Warn().Err(err).Msg("failed to calc some of the drifts")
 				}
 				if drifts == nil {
-					iacMetadata["pulumiState"] = "managed"
+					node.Metadata.PulumiState = "managed"
 
 				} else {
-					iacMetadata["pulumiState"] = "modified"
-					iacMetadata["pulumiDrifts"] = drifts
+					node.Metadata.PulumiState = "modified"
+					node.Metadata.PulumiDrifts = drifts
 				}
 			default:
 				continue
 			}
 			if len(state.Outputs) == 0 {
-				//TODO - log + update stack status (?)
 				continue
 			}
-			s3Node["metadata"] = iacMetadata
-			s3Node["attributes"] = getIacAttributes(state.Outputs)
+			node.Attributes = getIacAttributes(state.Outputs)
 			if ARN := state.Outputs["arn"].V; ARN != nil {
-				s3Node["arn"] = ARN
+				node.Arn = goKitTypes.ToString(ARN)
 				awsAccount, region, err := getAccountAndRegionFromArn(fmt.Sprintf("%v", ARN))
 				if err != nil {
 					logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
@@ -122,10 +119,11 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 						Msg("failed to parse arn")
 					continue
 				}
-				s3Node["region"] = region
-				s3Node["providerAccountId"] = awsAccount
+				node.Region = region
+				node.ProviderAccountId = awsAccount
+				node.AssetId = node.Arn
 				if awsIntegrationId := getAwsIntegrationId(awsIntegrations, awsAccount); awsIntegrationId != "" {
-					s3Node["awsIntegration"] = awsIntegrationId
+					node.AwsIntegration = awsIntegrationId
 				}
 				if count, ok := awsCommonProviders[awsAccount]; ok {
 					awsCommonProviders[awsAccount] = count + 1
@@ -140,15 +138,14 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					Msg("no arn for resource")
 				continue
 			}
-
-			s3Nodes = append(s3Nodes, s3Node)
+			nodes = append(nodes, node)
 
 		} else if strings.HasPrefix(metadata.Type.String(), "kubernetes:") {
+			node.Type = "k8s"
 			// k8s flow currently supports only managed state
 			var uid string
 			newState := *metadata.New
-			s3Node["metadata"] = iacMetadata
-			s3Node["attributes"], err = getK8sIacAttributes(newState.Outputs, []string{"status", "__inputs", "__initialApiVersion"})
+			node.Attributes , err = getK8sIacAttributes(newState.Outputs, []string{"status", "__inputs", "__initialApiVersion"})
 			if err != nil {
 				logger.Err(err).Msg("failed to get iac attributes")
 				continue
@@ -164,12 +161,12 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 					continue
 				}
 				if namespace != nil {
-					s3Node["location"] = goKitTypes.ToString(namespace)
+					node.Location = goKitTypes.ToString(namespace)
 				} else {
-					s3Node["location"] = ""
+					node.Location = ""
 				}
-				s3Node["name"] = goKitTypes.ToString(name)
-				s3Node["resourceId"] = goKitTypes.ToString(interfaceUid)
+				node.Name = goKitTypes.ToString(name)
+				node.ResourceId = goKitTypes.ToString(interfaceUid)
 
 			} else {
 				logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
@@ -183,8 +180,8 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				continue
 			}
 			kind := goKitTypes.ToString(resourceKind)
-			s3Node["objectType"] = k8sUtils.GetKubernetesResourceType(kind, goKitTypes.ToString(s3Node["name"]))
-			s3Node["kind"] = kind
+			node.ObjectType = k8sUtils.GetKubernetesResourceType(kind, goKitTypes.ToString(node.Name))
+			node.Kind = kind
 			if !helpers.StringSliceContains(uids, uid) {
 				uids = append(uids, uid)
 			}
@@ -192,8 +189,8 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			if !helpers.StringSliceContains(kinds, kind) {
 				kinds = append(kinds, kind)
 			}
-			assetTypes = append(assetTypes, goKitTypes.ToString(s3Node["objectType"]))
-			k8sNodes = append(k8sNodes, s3Node)
+			assetTypes = append(assetTypes, goKitTypes.ToString(node.ObjectType))
+			k8sNodes = append(k8sNodes, node)
 		}
 
 	}
@@ -202,7 +199,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		if err != nil {
 			logger.Err(err).Msg("failed to build k8s arns")
 		} else {
-			s3Nodes = append(s3Nodes, k8sNodes...)
+			nodes = append(nodes, k8sNodes...)
 			k8sCommonProviders[clusterId] = 1
 
 		}
@@ -216,7 +213,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 	if err != nil {
 		logger.Err(err).Msg("failed to update k8s common provider")
 	}
-	return s3Nodes, assetTypes, nil
+	return nodes, assetTypes, nil
 }
 
 func getSameMetadata(event engine.Event) engine.StepEventMetadata {
@@ -286,7 +283,7 @@ func getIacAttributes(outputs resource.PropertyMap) string {
 	return string(attributesBytes)
 }
 
-func buildK8sArns(k8sNodes []map[string]interface{}, accountId string, uids, kinds []string, cfg *config.Config, logger *zerolog.Logger, ctx context.Context) ([]map[string]interface{}, string, error) {
+func buildK8sArns(k8sNodes []PulumiNode, accountId string, uids, kinds []string, cfg *config.Config, logger *zerolog.Logger, ctx context.Context) ([]PulumiNode, string, error) {
 	var clusterId string
 	integrationIds, err := utils.GetK8sIntegrationIds(accountId, uids, kinds, logger)
 	if err != nil || len(integrationIds) == 0 {
@@ -304,21 +301,14 @@ func buildK8sArns(k8sNodes []map[string]interface{}, accountId string, uids, kin
 		}
 	}
 
-	funk.Map(k8sNodes, func(node map[string]interface{}) map[string]interface{} {
-		if namespace, ok := node["location"]; ok && namespace != nil {
-			node["arn"] = k8sUtils.BuildArn(goKitTypes.ToString(namespace), clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
-			node["assetId"] = k8sUtils.BuildArn(goKitTypes.ToString(namespace), clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
+	k8sNodes = funk.Map(k8sNodes, func(node PulumiNode) PulumiNode {
+			node.Arn = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
+			node.AssetId = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
 			if len(integrationIds) > 0 {
-				node["k8sIntegration"] = integrationIds[0]
-			}
-		} else {
-			node["arn"] = k8sUtils.BuildArn("", clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
-			node["assetId"] = k8sUtils.BuildArn("", clusterId, goKitTypes.ToString(node["kind"]), goKitTypes.ToString(node["name"]))
-			if len(integrationIds) > 0 {
-				node["k8sIntegration"] = integrationIds[0]
-			}		}
+				node.K8sIntegration = integrationIds[0]
+		}
 		return node
-	})
+	}).([]PulumiNode)
 	return k8sNodes, clusterId, nil
 }
 

@@ -48,7 +48,7 @@ func PulumiMapper(
 	}
 
 	stack, err := httpBackend.GetStack(client.Ctx, stackRef.Name())
-	if err != nil || stack == nil{
+	if err != nil || stack == nil {
 		logger.Err(err).Str("accountId", accountId).Str("stackId", stackId).Msg("failed getting stack")
 		return updateStateFileDeleted(ctx, consumer.Config, accountId, stackId)
 	}
@@ -77,8 +77,11 @@ func PulumiMapper(
 		logger.Info().Str("accountId", accountId).Str("stackId", stackId).Msg("found empty state file")
 		return updateEmptyStateFile(ctx, consumer.Config, accountId, stackId)
 	}
-	nodes, assetTypes, err := CreatePulumiNodes(events, accountId, stackId, integrationId, stackName, projectName, organizationName, logger, consumer.Config)
-
+	nodes, assetTypes, err := CreateS3Node(events, accountId, stackId, integrationId, stackName, projectName, organizationName, logger, consumer.Config)
+	if err != nil {
+		logger.Err(err).Msg("failed to create s3 nodes")
+		return err
+	}
 	jsonlinesNodes, err := utils.ToJsonLines(nodes)
 	if err != nil {
 		logger.Fatal().Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
@@ -97,7 +100,6 @@ func PulumiMapper(
 	logger.Info().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
 		Str("stackName", stackName).Str("OrganizationName", organizationName).Msg("Successfully wrote nodes to s3 bucket")
 
-
 	err = utils.InvokeEngineLambda(consumer.Config, assetTypes, logger)
 	if err != nil {
 		logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).Str("projectName", projectName).
@@ -110,12 +112,12 @@ func PulumiMapper(
 
 }
 
-func updateEmptyStateFile(ctx context.Context, cfg *config.Config, accountId, stackId string)  error{
+func updateEmptyStateFile(ctx context.Context, cfg *config.Config, accountId, stackId string) error {
 	updates := bson.M{"metadata.fetchingStatus.stateFileEmpty": true}
 	return utils.UpdateStack(ctx, cfg, accountId, stackId, updates)
 }
 
-func updateStateFileDeleted(ctx context.Context, cfg *config.Config, accountId, stackId string)  error{
+func updateStateFileDeleted(ctx context.Context, cfg *config.Config, accountId, stackId string) error {
 	updates := bson.M{"metadata.fetchingStatus.stateFileDeleted": true}
 	return utils.UpdateStack(ctx, cfg, accountId, stackId, updates)
 }
