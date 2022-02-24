@@ -13,6 +13,7 @@ import (
 	goKitTypes "github.com/infralight/go-kit/types"
 	k8sApiUtils "github.com/infralight/k8s-api/pkg/utils"
 	"github.com/infralight/pulumi/refresher"
+	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/config"
 	"github.com/infralight/pulumi/refresher/utils"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
@@ -26,7 +27,7 @@ import (
 	"time"
 )
 
-func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger, config *config.Config) (result []PulumiNode, assetTypes []string, err error) {
+func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *config.Config, consumer *common.Consumer) (result []PulumiNode, assetTypes []string, err error) {
 
 	var nodes []PulumiNode
 	var k8sNodes []PulumiNode
@@ -36,20 +37,20 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 	k8sCommonProviders := make(map[string]int)
 	ctx := context.Background()
 
-	awsIntegrations, err := utils.ListAwsIntegrations(ctx, config, accountId, logger)
+	awsIntegrations, err := consumer.MongoDb.ListAWSIntegrations(ctx, config.AccountId)
 	if err != nil {
-		logger.Err(err).Str("accountId", accountId).Str("integrationId", integrationId).Msg("failed to list aws integrations")
+		logger.Err(err).Msg("failed to list aws integrations")
 		return nil, nil, err
 	}
-	k8sIntegrations, err := utils.ListK8sIntegrations(ctx, config, accountId, logger)
+	k8sIntegrations, err := consumer.MongoDb.ListK8SIntegrations(ctx, config.AccountId)
 	if err != nil {
-		logger.Err(err).Str("accountId", accountId).Str("integrationId", integrationId).Msg("failed to list k8s integrations")
+		logger.Err(err).Msg("failed to list k8s integrations")
 		return nil, nil, err
 	}
 
-	stack, err := utils.GetStack(ctx, config, accountId, stackId, logger)
+	stack, err := consumer.MongoDb.GetStack(ctx, config.AccountId, config.StackId, nil)
 	if err != nil {
-		logger.Err(err).Str("accountId", accountId).Str("integrationId", integrationId).Msg("failed to get stack")
+		logger.Err(err).Msg("failed to get stack")
 		return nil, nil, err
 	}
 
@@ -58,15 +59,15 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		var state engine.StepEventStateMetadata
 
 		var node PulumiNode
-		node.Metadata.StackId = stackId
-		node.Metadata.StackName = stackName
-		node.Metadata.ProjectName = projectName
-		node.Metadata.OrganizationName = organizationName
+		node.Metadata.StackId = config.StackId
+		node.Metadata.StackName = config.StackName
+		node.Metadata.ProjectName = config.ProjectName
+		node.Metadata.OrganizationName = config.OrganizationName
 		node.Metadata.PulumiType = metadata.Type.String()
-		node.StackId = stackId
+		node.StackId = config.StackId
 		node.Iac = "pulumi"
-		node.AccountId = accountId
-		node.PulumiIntegrationId = integrationId
+		node.AccountId = config.AccountId
+		node.PulumiIntegrationId = config.PulumiIntegrationId
 		node.IsOrchestrator = false
 		node.UpdatedAt = time.Now().Unix()
 
@@ -113,10 +114,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				node.Arn = goKitTypes.ToString(ARN)
 				awsAccount, region, err := getAccountAndRegionFromArn(fmt.Sprintf("%v", ARN))
 				if err != nil {
-					logger.Err(err).Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
-						Str("projectName", projectName).Str("stackName", stackName).
-						Str("OrganizationName", organizationName).Interface("arn", ARN).
-						Msg("failed to parse arn")
+					logger.Err(err).Interface("arn", ARN).Msg("failed to parse arn")
 					continue
 				}
 				node.Region = region
@@ -132,10 +130,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				}
 
 			} else {
-				logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
-					Str("projectName", projectName).Str("stackName", stackName).
-					Str("OrganizationName", organizationName).Str("type", metadata.Type.String()).
-					Msg("no arn for resource")
+				logger.Warn().Str("type", metadata.Type.String()).Msg("no arn for resource")
 				continue
 			}
 			nodes = append(nodes, node)
@@ -145,7 +140,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 			// k8s flow currently supports only managed state
 			var uid string
 			newState := *metadata.New
-			node.Attributes , err = getK8sIacAttributes(newState.Outputs, []string{"status", "__inputs", "__initialApiVersion"})
+			node.Attributes, err = getK8sIacAttributes(newState.Outputs, []string{"status", "__inputs", "__initialApiVersion"})
 			if err != nil {
 				logger.Err(err).Msg("failed to get iac attributes")
 				continue
@@ -169,14 +164,12 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 				node.ResourceId = goKitTypes.ToString(interfaceUid)
 
 			} else {
-				logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
-					Str("stackId", stackId).Msg("found k8s resource without metadata")
+				logger.Warn().Msg("found k8s resource without metadata")
 				continue
 			}
 			var resourceKind interface{}
 			if resourceKind = newState.Outputs["kind"].V; resourceKind == nil {
-				logger.Warn().Str("accountId", accountId).Str("pulumiIntegrationId", integrationId).
-					Str("stackId", stackId).Msg("found k8s resource without kind")
+				logger.Warn().Msg("found k8s resource without kind")
 				continue
 			}
 			kind := goKitTypes.ToString(resourceKind)
@@ -195,7 +188,7 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 
 	}
 	if len(k8sNodes) > 0 {
-		k8sNodes, clusterId, err := buildK8sArns(k8sNodes, accountId, uids, kinds, config, logger, ctx)
+		k8sNodes, clusterId, err := buildK8sArns(ctx, k8sNodes, uids, kinds , logger, consumer)
 		if err != nil {
 			logger.Err(err).Msg("failed to build k8s arns")
 		} else {
@@ -205,14 +198,16 @@ func CreatePulumiNodes(events []engine.Event, accountId, stackId, integrationId,
 		}
 	}
 
-	err = handleAwsCommonProviders(ctx, accountId, stackId, awsCommonProviders, stack, awsIntegrations, config)
+	err = handleCommonProviders(ctx, awsCommonProviders, stack, awsIntegrations, consumer, "aws")
 	if err != nil {
 		logger.Err(err).Msg("failed to update aws common provider")
 	}
-	err = handleK8sCommonProviders(ctx, accountId, stackId, k8sCommonProviders, stack, k8sIntegrations, config)
+
+	err = handleCommonProviders(ctx, k8sCommonProviders, stack, k8sIntegrations, consumer, "k8s")
 	if err != nil {
-		logger.Err(err).Msg("failed to update k8s common provider")
+		logger.Err(err).Msg("failed to update aws common provider")
 	}
+
 	return nodes, assetTypes, nil
 }
 
@@ -283,9 +278,9 @@ func getIacAttributes(outputs resource.PropertyMap) string {
 	return string(attributesBytes)
 }
 
-func buildK8sArns(k8sNodes []PulumiNode, accountId string, uids, kinds []string, cfg *config.Config, logger *zerolog.Logger, ctx context.Context) ([]PulumiNode, string, error) {
+func buildK8sArns(ctx context.Context, k8sNodes []PulumiNode,  uids, kinds []string,  logger *zerolog.Logger,consumer *common.Consumer ) ([]PulumiNode, string, error) {
 	var clusterId string
-	integrationIds, err := utils.GetK8sIntegrationIds(accountId, uids, kinds, logger)
+	integrationIds, err := utils.GetK8sIntegrationIds(consumer.Config.AccountId, uids, kinds, logger)
 	if err != nil || len(integrationIds) == 0 {
 		logger.Err(err).Msg("failed to get k8s integration")
 		clusterId = "K8sCluster"
@@ -294,18 +289,19 @@ func buildK8sArns(k8sNodes []PulumiNode, accountId string, uids, kinds []string,
 		return nil, "", errors.New("found more than one k8s integrations")
 	}
 	if clusterId != "K8sCluster" {
-		clusterId, err = utils.GetClusterId(ctx, cfg, integrationIds[0], accountId, logger)
+		k8sIntegration, err := consumer.MongoDb.GetK8sIntegration(ctx, integrationIds[0],consumer.Config.AccountId)
 		if err != nil {
 			logger.Err(err).Msg("failed to get cluster id")
 			return nil, "", err
 		}
+		clusterId = k8sIntegration.ClusterId
 	}
 
 	k8sNodes = funk.Map(k8sNodes, func(node PulumiNode) PulumiNode {
-			node.Arn = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
-			node.AssetId = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
-			if len(integrationIds) > 0 {
-				node.K8sIntegration = integrationIds[0]
+		node.Arn = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
+		node.AssetId = k8sUtils.BuildArn(goKitTypes.ToString(node.Location), clusterId, goKitTypes.ToString(node.Kind), goKitTypes.ToString(node.Name))
+		if len(integrationIds) > 0 {
+			node.K8sIntegration = integrationIds[0]
 		}
 		return node
 	}).([]PulumiNode)
@@ -334,7 +330,7 @@ func getK8sIntegrationId(k8sIntegrations []mongo.K8sIntegration, clusterId strin
 	return ""
 }
 
-func handleAwsCommonProviders(ctx context.Context, accountId, stackId string, commonProviderMap map[string]int, stack *mongo.GlobalStack, awsIntegrations []mongo.AwsIntegration, config *config.Config) error {
+func handleAwsCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, awsIntegrations []mongo.AwsIntegration, consumer *common.Consumer) error {
 	if len(commonProviderMap) != 0 {
 		max := 0
 		var mostCommonProvider string
@@ -368,9 +364,11 @@ func handleAwsCommonProviders(ctx context.Context, accountId, stackId string, co
 			}
 		}
 
-		if len(updateDict) != 0  {
+		if len(updateDict) != 0 {
 			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
-			err = utils.UpdateStack(ctx, config, accountId, stackId, updateDict)
+			_, err = consumer.MongoDb.UpdateStack(ctx, consumer.Config.AccountId, consumer.Config.StackId, nil, bson.M{
+				"$set": updateDict,
+			})
 			if err != nil {
 				return err
 			}
@@ -380,7 +378,7 @@ func handleAwsCommonProviders(ctx context.Context, accountId, stackId string, co
 	return nil
 }
 
-func handleK8sCommonProviders(ctx context.Context, accountId, stackId string, commonProviderMap map[string]int, stack *mongo.GlobalStack, k8sIntegrations []mongo.K8sIntegration, config *config.Config) error {
+func handleK8sCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, k8sIntegrations []mongo.K8sIntegration, consumer *common.Consumer) error {
 	if len(commonProviderMap) != 0 {
 		max := 0
 		var mostCommonProvider string
@@ -416,7 +414,68 @@ func handleK8sCommonProviders(ctx context.Context, accountId, stackId string, co
 
 		if len(updateDict) != 0 {
 			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
-			err = utils.UpdateStack(ctx, config, accountId, stackId, updateDict)
+			_, err = consumer.MongoDb.UpdateStack(ctx, consumer.Config.AccountId, consumer.Config.StackId, nil, bson.M{
+				"$set": updateDict,
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
+}
+
+func handleCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, integrationsArray interface{}, consumer *common.Consumer, provider string) error {
+
+	if len(commonProviderMap) != 0 {
+		max := 0
+		var mostCommonProvider string
+		var err error
+		updateDict := make(bson.M)
+		for providerId, count := range commonProviderMap {
+			if count > max {
+				mostCommonProvider = providerId
+			}
+		}
+		var integrationId string
+		if provider == "aws" {
+			integrationArray := integrationsArray.([]mongo.AwsIntegration)
+			integrationId = getAwsIntegrationId(integrationArray, mostCommonProvider)
+
+		} else if provider == "k8s" {
+			integrationArray := integrationsArray.([]mongo.K8sIntegration)
+			integrationId = getK8sIntegrationId(integrationArray, mostCommonProvider)
+
+		}
+
+		if mongoIntegrationObject, ok := stack.Integrations[provider]; ok {
+			if externalId, ok := mongoIntegrationObject["externalId"]; ok {
+				if externalId != mostCommonProvider {
+					updateDict["integrations.aws.externalId"] = externalId
+				}
+			}
+			if IntegrationId, ok := mongoIntegrationObject["id"]; ok {
+				if IntegrationId != integrationId && integrationId != "" {
+					updateDict[fmt.Sprintf("integrations.%s.id", provider)], err = primitive.ObjectIDFromHex(integrationId)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		} else {
+
+			updateDict[fmt.Sprintf("integrations.%s.externalId", provider)] = mostCommonProvider
+			if integrationId != "" {
+				updateDict[fmt.Sprintf("integrations.%s.id", provider)] = integrationId
+			}
+		}
+
+		if len(updateDict) != 0 {
+			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
+			_, err = consumer.MongoDb.UpdateStack(ctx, consumer.Config.AccountId, consumer.Config.StackId, nil, bson.M{
+				"$set": updateDict,
+			})
 			if err != nil {
 				return err
 			}

@@ -2,14 +2,15 @@ package engine
 
 import (
 	"encoding/json"
+	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/config"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
 	"github.com/rs/zerolog"
 )
 
-func CreateS3Node(events []engine.Event, accountId, stackId, integrationId, stackName, projectName, organizationName string, logger *zerolog.Logger, config *config.Config) ([]map[string]interface{},[]string, error) {
+func CreateS3Node(events []engine.Event,  logger *zerolog.Logger, config *config.Config, consumer *common.Consumer) ([]map[string]interface{},[]string, error) {
 
-	nodes, assetTypes, err := CreatePulumiNodes(events, accountId, stackId, integrationId, stackName, projectName, organizationName, logger, config)
+	nodes, assetTypes, err := CreatePulumiNodes(events, logger, config, consumer)
 	if err != nil {
 		logger.Err(err).Msg("failed to create pulumi Nodes")
 		return nil, nil, err

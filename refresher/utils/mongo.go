@@ -40,12 +40,7 @@ func ListAwsIntegrations(ctx context.Context, cfg *config.Config, accountId stri
 
 }
 
-func ListK8sIntegrations(ctx context.Context, cfg *config.Config, accountId string, logger *zerolog.Logger) ([]mongo.K8sIntegration, error) {
-	client, err := mongo.NewClient(cfg.MongoURI)
-	if err != nil {
-		logger.Err(err).Msg("failed to create new mongo client")
-		return nil, err
-	}
+func ListK8sIntegrations(ctx context.Context, accountId string, logger *zerolog.Logger, client mongo.Client) ([]mongo.K8sIntegration, error) {
 	k8sIntegrations, err := client.ListK8SIntegrations(ctx, accountId)
 	if err != nil {
 		logger.Err(err).Msg("failed to list account's aws integrations")
@@ -55,12 +50,7 @@ func ListK8sIntegrations(ctx context.Context, cfg *config.Config, accountId stri
 
 }
 
-func GetStack(ctx context.Context, cfg *config.Config, accountId, stackId string, logger *zerolog.Logger) (*mongo.GlobalStack, error) {
-	client, err := mongo.NewClient(cfg.MongoURI)
-	if err != nil {
-		logger.Err(err).Msg("failed to create new mongo client")
-		return nil, err
-	}
+func GetStack(ctx context.Context, cfg *config.Config, accountId, stackId string, logger *zerolog.Logger, client mongo.Client) (*mongo.GlobalStack, error) {
 	stack, err := client.GetStack(ctx, accountId, stackId, nil)
 	if err != nil {
 		logger.Err(err).Str("stackId", stackId).Str("accountId", accountId).Msg("failed to get stack")
@@ -70,18 +60,14 @@ func GetStack(ctx context.Context, cfg *config.Config, accountId, stackId string
 
 }
 
-func UpdateStack(ctx context.Context, cfg *config.Config, accountId, stackId string, updates bson.M) error {
+func UpdateStack(ctx context.Context, cfg *config.Config, accountId, stackId string, updates bson.M, client mongo.Client) error {
 
 	if updates == nil {
 		return fmt.Errorf("no updates found")
 	}
-	client, err := mongo.NewClient(cfg.MongoURI)
-	if err != nil {
-		return err
-	}
 
 	updates["updatedAt"] = time.Now().Format(time.RFC3339)
-	_, err = client.UpdateStack(ctx, accountId, stackId, nil, bson.M{
+	_, err := client.UpdateStack(ctx, accountId, stackId, nil, bson.M{
 		"$set": updates,
 	})
 	if err != nil {
