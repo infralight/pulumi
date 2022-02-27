@@ -103,6 +103,13 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 					node.Metadata.PulumiState = "modified"
 					node.Metadata.PulumiDrifts = drifts
 				}
+			case deploy.OpRefresh:
+				if consumer.Config.ClientAWSIntegrationId == "" {
+					state = *metadata.New
+				} else {
+					continue
+				}
+
 			default:
 				continue
 			}
@@ -133,6 +140,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 				logger.Warn().Str("type", metadata.Type.String()).Msg("no arn for resource")
 				continue
 			}
+			// if we don't have the aws integration id - we use the only calculating the most common provider.
 			if consumer.Config.ClientAWSIntegrationId != "" {
 				nodes = append(nodes, node)
 

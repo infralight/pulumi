@@ -10,6 +10,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/engine"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/rs/zerolog"
+	"github.com/thoas/go-funk"
 )
 
 func PulumiMapper(
@@ -70,6 +71,12 @@ func PulumiMapper(
 
 	httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
 	close(eventsChannel)
+
+	//filter out irrelevant events
+	events = funk.Filter(events, func(event engine.Event) bool {
+		return event.Type != engine.SummaryEvent && getSameMetadata(event).Type.String() != "pulumi:pulumi:Stack"
+	}).([]engine.Event)
+
 
 	if len(events) <= 1 {
 		logger.Info().Msg("found empty state file")
