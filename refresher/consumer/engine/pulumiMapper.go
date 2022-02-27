@@ -69,8 +69,13 @@ func PulumiMapper(
 		}
 	}()
 
-	httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
+	_, _, res := httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
 	close(eventsChannel)
+
+	if res != nil  && len(events) == 0{
+		logger.Err(err).Msg("failed running pulumi preview")
+		return consumer.MongoDb.UpdateStateFileDeleted(ctx, consumer.Config.AccountId, consumer.Config.StackId)
+	}
 
 	//filter out irrelevant events
 	events = funk.Filter(events, func(event engine.Event) bool {
