@@ -71,7 +71,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 		node.IsOrchestrator = false
 		node.UpdatedAt = time.Now().Unix()
 
-		if strings.HasPrefix(metadata.Type.String(), "aws:") {
+		if strings.HasPrefix(metadata.Type.String(), "aws:") && consumer.Config.ClientAWSIntegrationId != "" {
 			node.Type = "aws"
 			terraformType, err := goKit.GetTerraformTypeByPulumi(metadata.Type.String())
 			if err != nil {
