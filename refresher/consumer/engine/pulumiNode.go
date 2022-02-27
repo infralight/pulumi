@@ -71,7 +71,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 		node.IsOrchestrator = false
 		node.UpdatedAt = time.Now().Unix()
 
-		if strings.HasPrefix(metadata.Type.String(), "aws:") && consumer.Config.ClientAWSIntegrationId != "" {
+		if strings.HasPrefix(metadata.Type.String(), "aws:") {
 			node.Type = "aws"
 			terraformType, err := goKit.GetTerraformTypeByPulumi(metadata.Type.String())
 			if err != nil {
@@ -133,8 +133,10 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 				logger.Warn().Str("type", metadata.Type.String()).Msg("no arn for resource")
 				continue
 			}
-			nodes = append(nodes, node)
+			if consumer.Config.ClientAWSIntegrationId != "" {
+				nodes = append(nodes, node)
 
+			}
 		} else if strings.HasPrefix(metadata.Type.String(), "kubernetes:") {
 			node.Type = "k8s"
 			// k8s flow currently supports only managed state
