@@ -340,101 +340,6 @@ func getK8sIntegrationId(k8sIntegrations []mongo.K8sIntegration, clusterId strin
 	return ""
 }
 
-func handleAwsCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, awsIntegrations []mongo.AwsIntegration, consumer *common.Consumer) error {
-	if len(commonProviderMap) != 0 {
-		max := 0
-		var mostCommonProvider string
-		var err error
-		updateDict := make(bson.M)
-		for providerId, count := range commonProviderMap {
-			if count > max {
-				mostCommonProvider = providerId
-			}
-		}
-		integrationId := getAwsIntegrationId(awsIntegrations, mostCommonProvider)
-
-		if awsIntegration, ok := stack.Integrations["aws"]; ok {
-			if externalId, ok := awsIntegration["externalId"]; ok {
-				if externalId != mostCommonProvider {
-					updateDict["integrations.aws.externalId"] = externalId
-				}
-			}
-			if awsIntegrationId, ok := awsIntegration["id"]; ok {
-				if awsIntegrationId != integrationId && integrationId != "" {
-					updateDict["integrations.aws.id"], err = primitive.ObjectIDFromHex(integrationId)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		} else {
-			updateDict["integrations.aws.externalId"] = mostCommonProvider
-			if integrationId != "" {
-				updateDict["integrations.aws.id"] = integrationId
-			}
-		}
-
-		if len(updateDict) != 0 {
-			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
-			_, err = consumer.MongoDb.UpdateStack(ctx, consumer.Config.AccountId, consumer.Config.StackId, nil, bson.M{
-				"$set": updateDict,
-			})
-			if err != nil {
-				return err
-			}
-		}
-
-	}
-	return nil
-}
-
-func handleK8sCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, k8sIntegrations []mongo.K8sIntegration, consumer *common.Consumer) error {
-	if len(commonProviderMap) != 0 {
-		max := 0
-		var mostCommonProvider string
-		var err error
-		updateDict := make(bson.M)
-		for providerId, count := range commonProviderMap {
-			if count > max {
-				mostCommonProvider = providerId
-			}
-		}
-		integrationId := getK8sIntegrationId(k8sIntegrations, mostCommonProvider)
-
-		if k8sIntegration, ok := stack.Integrations["k8s"]; ok {
-			if externalId, ok := k8sIntegration["externalId"]; ok {
-				if externalId != mostCommonProvider {
-					updateDict["integrations.k8s.externalId"] = externalId
-				}
-			}
-			if k8sIntegrationId, ok := k8sIntegration["id"]; ok {
-				if k8sIntegrationId != integrationId && integrationId != "" {
-					updateDict["integrations.k8s.id"], err = primitive.ObjectIDFromHex(integrationId)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		} else {
-			updateDict["integrations.k8s.externalId"] = mostCommonProvider
-			if integrationId != "" {
-				updateDict["integrations.k8s.id"] = integrationId
-			}
-		}
-
-		if len(updateDict) != 0 {
-			updateDict["updatedAt"] = time.Now().Format(time.RFC3339)
-			_, err = consumer.MongoDb.UpdateStack(ctx, consumer.Config.AccountId, consumer.Config.StackId, nil, bson.M{
-				"$set": updateDict,
-			})
-			if err != nil {
-				return err
-			}
-		}
-
-	}
-	return nil
-}
 
 func handleCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, integrationsArray interface{}, consumer *common.Consumer, provider string) error {
 
@@ -477,7 +382,10 @@ func handleCommonProviders(ctx context.Context, commonProviderMap map[string]int
 
 			updateDict[fmt.Sprintf("integrations.%s.externalId", provider)] = mostCommonProvider
 			if integrationId != "" {
-				updateDict[fmt.Sprintf("integrations.%s.id", provider)] = integrationId
+				updateDict[fmt.Sprintf("integrations.%s.id", provider)], err = primitive.ObjectIDFromHex(integrationId)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
