@@ -73,7 +73,7 @@ func PulumiMapper(
 	close(eventsChannel)
 
 	if res != nil  && len(events) == 0{
-		logger.Err(err).Msg("failed running pulumi preview")
+		logger.Err(res.Error()).Msg("failed running pulumi preview")
 		return consumer.MongoDb.UpdateStateFileDeleted(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
 
