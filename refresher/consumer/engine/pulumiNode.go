@@ -75,7 +75,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 			node.Type = "aws"
 			terraformType, err := goKit.GetTerraformTypeByPulumi(metadata.Type.String())
 			if err != nil {
-				logger.Warn().Str("pulumiAssetType", metadata.Type.String()).Msg("missing pulumi to terraform type mapping")
+				logger.Err(err).Str("pulumiAssetType", metadata.Type.String()).Msg("missing pulumi to terraform type mapping")
 			} else {
 				node.ObjectType = terraformType
 				if !helpers.StringSliceContains(assetTypes, terraformType) {
@@ -198,7 +198,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 
 	}
 	if len(k8sNodes) > 0 {
-		k8sNodes, clusterId, err := buildK8sArns(ctx, k8sNodes, uids, kinds , logger, consumer)
+		k8sNodes, clusterId, err := buildK8sArns(k8sNodes, uids, kinds , logger, consumer, k8sIntegrations)
 		if err != nil {
 			logger.Err(err).Msg("failed to build k8s arns")
 		} else {
@@ -288,7 +288,7 @@ func getIacAttributes(outputs resource.PropertyMap) string {
 	return string(attributesBytes)
 }
 
-func buildK8sArns(ctx context.Context, k8sNodes []PulumiNode,  uids, kinds []string,  logger *zerolog.Logger,consumer *common.Consumer ) ([]PulumiNode, string, error) {
+func buildK8sArns(k8sNodes []PulumiNode,  uids, kinds []string,  logger *zerolog.Logger,consumer *common.Consumer, k8sIntegrations []mongo.K8sIntegration) ([]PulumiNode, string, error) {
 	var clusterId string
 	integrationIds, err := utils.GetK8sIntegrationIds(consumer.Config.AccountId, uids, kinds, logger)
 	if err != nil || len(integrationIds) == 0 {
@@ -299,9 +299,9 @@ func buildK8sArns(ctx context.Context, k8sNodes []PulumiNode,  uids, kinds []str
 		return nil, "", errors.New("found more than one k8s integrations")
 	}
 	if clusterId != "K8sCluster" {
-		k8sIntegration, err := consumer.MongoDb.GetK8sIntegration(ctx, integrationIds[0],consumer.Config.AccountId)
-		if err != nil {
-			logger.Err(err).Msg("failed to get cluster id")
+		k8sIntegration := getK8sIntegrationObjectById(k8sIntegrations, integrationIds[0])
+		if k8sIntegration == nil {
+			logger.Err(err).Msg("failed to get k8s integration")
 			return nil, "", err
 		}
 		clusterId = k8sIntegration.ClusterId
@@ -340,6 +340,16 @@ func getK8sIntegrationId(k8sIntegrations []mongo.K8sIntegration, clusterId strin
 	return ""
 }
 
+func getK8sIntegrationObjectById(k8sIntegrations []mongo.K8sIntegration, integrationId string) *mongo.K8sIntegration {
+	if k8sIntegrations != nil {
+		for _, integration := range k8sIntegrations {
+			if integration.ID == integrationId {
+				return &integration
+			}
+		}
+	}
+	return nil
+}
 
 func handleCommonProviders(ctx context.Context, commonProviderMap map[string]int, stack *mongo.GlobalStack, integrationsArray interface{}, consumer *common.Consumer, provider string) error {
 
