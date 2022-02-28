@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"encoding/json"
+	"github.com/infralight/go-kit/helpers"
 	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/config"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
@@ -25,7 +25,7 @@ func CreateS3Node(events []engine.Event,  logger *zerolog.Logger, config *config
 		s3Node["isOrchestrator"] = node.IsOrchestrator
 		s3Node["updatedAt"] = node.UpdatedAt
 		s3Node["objectType"] = node.ObjectType
-		s3Node["metadata"] = toMap(&node.Metadata)
+		s3Node["metadata"] = helpers.ConvertToMap(&node.Metadata)
 		s3Node["arn"] = node.Arn
 		s3Node["region"] = node.Region
 		s3Node["attributes"] = node.Attributes
@@ -54,11 +54,4 @@ func CreateS3Node(events []engine.Event,  logger *zerolog.Logger, config *config
 
 	}
 	return s3Nodes, assetTypes, nil
-}
-
-func toMap(metadata *PulumiIacMetadata) (mapMetadata map[string]interface{}) {
-
-	byteStruct, _ := json.Marshal(metadata)
-	json.Unmarshal(byteStruct, &mapMetadata)
-	return
 }
