@@ -83,7 +83,7 @@ func PulumiMapper(
 	}).([]engine.Event)
 
 
-	if len(events) <= 1 {
+	if len(events) < 1 {
 		logger.Info().Msg("found empty state file")
 		return consumer.MongoDb.UpdateEmptyStateFile(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
