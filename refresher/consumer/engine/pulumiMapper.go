@@ -132,11 +132,12 @@ func PulumiMapper(
 		}
 
 		err = utils.WriteAtrsToDynamo(cfg.AccountId, cfg.EngineAccumulatorDynamo, filteredAtrs, cfg.EngineAccumulatorTTL, dynamoClient)
+		logger.Info().Int("Records", len(filteredAtrs)).Msg("Successfully wrote chunk to dynamo")
 		if err != nil {
 			logger.Err(err).Msg("failed to write batch items to dynamo db")
 		}
 	}
 
-	logger.Info().Msg("Successfully triggered engine producer")
+	logger.Info().Msg("Successfully triggered engine producer from dynamodb")
 	return nil
 }
