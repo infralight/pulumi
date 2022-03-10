@@ -114,7 +114,7 @@ func PulumiMapper(
 		return err
 	}
 	logger.Info().Str("accountId", cfg.AccountId).Str("pulumiIntegrationId", cfg.PulumiIntegrationId).Str("projectName", cfg.ProjectName).
-		Str("stackName", cfg.StackName).Str("OrganizationName", cfg.OrganizationName).Msg("Successfully wrote nodes to s3 bucket")
+		Str("stackName", cfg.StackName).Int("records", len(nodes)).Str("OrganizationName", cfg.OrganizationName).Msg("Successfully wrote nodes to s3 bucket")
 
 	dynamoClient, err := goKitDynamo.NewClient(consumer.Config.LoadAwsSession())
 	if err != nil {
