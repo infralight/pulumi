@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	goKitDynamo "github.com/infralight/go-kit/db/dynamo"
 	"github.com/infralight/pulumi/refresher"
 	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/utils"
@@ -11,8 +12,10 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/rs/zerolog"
 	"github.com/thoas/go-funk"
-	goKitDynamo "github.com/infralight/go-kit/db/dynamo"
+)
 
+const (
+	dynamoChunkSize = 25
 )
 
 func PulumiMapper(
@@ -27,7 +30,6 @@ func PulumiMapper(
 		logger.Fatal().Err(err).Msg("failed to create new pulumi client")
 		return err
 	}
-
 
 	httpBackend, err := client.Login()
 	if err != nil {
@@ -74,7 +76,7 @@ func PulumiMapper(
 	_, _, res := httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
 	close(eventsChannel)
 
-	if res != nil  && len(events) == 0{
+	if res != nil && len(events) == 0 {
 		logger.Err(res.Error()).Msg("failed running pulumi preview")
 		return consumer.MongoDb.UpdateStateFileDeleted(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
@@ -84,12 +86,11 @@ func PulumiMapper(
 		return event.Type != engine.SummaryEvent && getSameMetadata(event).Type.String() != "pulumi:pulumi:Stack"
 	}).([]engine.Event)
 
-
 	if len(events) < 1 {
 		logger.Info().Msg("found empty state file")
 		return consumer.MongoDb.UpdateEmptyStateFile(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
-	nodes, assetTypes, err := CreateS3Node(events, logger, consumer.Config, consumer)
+	nodes, atrsToTrigger, err := CreateS3Node(events, logger, consumer.Config, consumer)
 	if err != nil {
 		logger.Err(err).Msg("failed to create s3 nodes")
 		return err
@@ -111,14 +112,31 @@ func PulumiMapper(
 	logger.Info().Str("accountId", cfg.AccountId).Str("pulumiIntegrationId", cfg.PulumiIntegrationId).Str("projectName", cfg.ProjectName).
 		Str("stackName", cfg.StackName).Str("OrganizationName", cfg.OrganizationName).Msg("Successfully wrote nodes to s3 bucket")
 
-	dynamoClient ,err := goKitDynamo.NewClient(consumer.Config.LoadAwsSession())
-	err = utils.InvokeEngineLambda(consumer.Config, assetTypes, logger)
+	dynamoClient, err := goKitDynamo.NewClient(consumer.Config.LoadAwsSession())
 	if err != nil {
-		logger.Err(err).Msg("failed to trigger engine producer")
+		logger.Err(err).Msg("failed to load aws session")
 		return err
 	}
+	atrsChunks := funk.Chunk(atrsToTrigger, dynamoChunkSize)
+	for _, chunk := range atrsChunks.([][]string) {
+		items, err := utils.GetAtrsFromDynamo(cfg.AccountId, cfg.EngineAccumulatorDynamo, chunk, dynamoClient)
+		if err != nil {
+			logger.Err(err).Msg("failed to get batch items from dynamodb")
+			continue
+		}
+
+		filteredAtrs, err := utils.DiffDynamoItems(items, chunk, cfg.AccountId)
+		if err != nil {
+			logger.Err(err).Msg("failed to calculate dynamo diff")
+			continue
+		}
+
+		err = utils.WriteAtrsToDynamo(cfg.AccountId, cfg.EngineAccumulatorDynamo, filteredAtrs, cfg.EngineAccumulatorTTL, dynamoClient)
+		if err != nil {
+			logger.Err(err).Msg("failed to write batch items to dynamo db")
+		}
+	}
+
 	logger.Info().Msg("Successfully triggered engine producer")
 	return nil
-
 }
-

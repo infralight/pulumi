@@ -7,9 +7,9 @@ replace github.com/pulumi/pulumi/pkg/v3 => ../pkg
 replace github.com/pulumi/pulumi/sdk/v3 => ../sdk
 
 require (
-	github.com/aws/aws-sdk-go v1.43.14
+	github.com/aws/aws-sdk-go v1.43.15
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/infralight/go-kit v1.54.0
+	github.com/infralight/go-kit v1.56.0
 	github.com/infralight/k8s-api v0.0.0-20220220151532-2a60b79dfca8
 	github.com/pulumi/pulumi/pkg/v3 v3.0.0-00010101000000-000000000000
 	github.com/pulumi/pulumi/sdk/v3 v3.23.2
