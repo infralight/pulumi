@@ -11,6 +11,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/rs/zerolog"
 	"github.com/thoas/go-funk"
+	goKitDynamo "github.com/infralight/go-kit/db/dynamo"
+
 )
 
 func PulumiMapper(
@@ -109,6 +111,7 @@ func PulumiMapper(
 	logger.Info().Str("accountId", cfg.AccountId).Str("pulumiIntegrationId", cfg.PulumiIntegrationId).Str("projectName", cfg.ProjectName).
 		Str("stackName", cfg.StackName).Str("OrganizationName", cfg.OrganizationName).Msg("Successfully wrote nodes to s3 bucket")
 
+	dynamoClient ,err := goKitDynamo.NewClient(consumer.Config.LoadAwsSession())
 	err = utils.InvokeEngineLambda(consumer.Config, assetTypes, logger)
 	if err != nil {
 		logger.Err(err).Msg("failed to trigger engine producer")
