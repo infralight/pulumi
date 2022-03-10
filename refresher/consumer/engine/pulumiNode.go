@@ -436,10 +436,11 @@ func buildAtrs(awsIntegrationId, k8sIntegrationId string, assetTypesWithRegions 
 		var atr string
 		if strings.HasPrefix(assetTypesWithRegion, "aws") && len(awsIntegrationId) > 0 {
 			atr = fmt.Sprintf("%s-%s", awsIntegrationId, assetTypesWithRegion)
+			atrs = append(atrs, atr)
 		} else  if strings.HasPrefix(assetTypesWithRegion, "kubernetes") && len(k8sIntegrationId) > 0 {
 			atr = fmt.Sprintf("%s-%s", k8sIntegrationId, assetTypesWithRegion)
+			atrs = append(atrs, atr)
 		}
-		atrs = append(atrs, atr)
 	}
 	return
 }
