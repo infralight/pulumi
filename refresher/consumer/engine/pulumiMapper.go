@@ -95,6 +95,10 @@ func PulumiMapper(
 		logger.Err(err).Msg("failed to create s3 nodes")
 		return err
 	}
+	if len(nodes) == 0 {
+		logger.Info().Msg("no nodes found")
+		return nil
+	}
 	jsonlinesNodes, err := utils.ToJsonLines(nodes)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to create jsonlines format")
