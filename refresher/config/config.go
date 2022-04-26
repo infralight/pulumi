@@ -102,10 +102,6 @@ func LoadConfig() (*Config, error) {
 		merr = multierror.Append(merr, errors.New("failed, environment variable STACK_ID must be provided"))
 	}
 
-	if cfg.StackId = os.Getenv("STACK_ID"); cfg.StackId == "" {
-		merr = multierror.Append(merr, errors.New("failed, environment variable STACK_ID must be provided"))
-	}
-
 	if cfg.FireflyAWSRoleARN = os.Getenv("AWS_ROLE_ARN"); cfg.FireflyAWSRoleARN == "" {
 		merr = multierror.Append(merr, errors.New("failed, environment variable AWS_ROLE_ARN must be provided"))
 	}

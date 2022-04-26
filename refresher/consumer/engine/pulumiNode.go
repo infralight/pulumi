@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *config.Config, consumer *common.Consumer) (result []PulumiNode, assetTypesWithRegions []string, err error) {
+func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *config.Config, consumer *common.Consumer, vcsData map[string]interface{}) (result []PulumiNode, assetTypesWithRegions []string, err error) {
 
 	var nodes []PulumiNode
 	var k8sNodes []PulumiNode
@@ -64,6 +64,8 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 		node.Metadata.ProjectName = config.ProjectName
 		node.Metadata.OrganizationName = config.OrganizationName
 		node.Metadata.PulumiType = metadata.Type.String()
+		node.Metadata.VcsRepo = vcsData["vcsRepo"].(string)
+		node.Metadata.VcsProvider = vcsData["vcsProvider"].(string)
 		node.StackId = config.StackId
 		node.Iac = "pulumi"
 		node.AccountId = config.AccountId
@@ -133,7 +135,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 					awsCommonProviders[awsAccount] = 1
 				}
 				if len(node.ObjectType) > 0 {
-					assetTypeAndRegion := fmt.Sprintf("%s-%s", node.ObjectType,node.Region)
+					assetTypeAndRegion := fmt.Sprintf("%s-%s", node.ObjectType, node.Region)
 					if !helpers.StringSliceContains(assetTypesWithRegions, assetTypeAndRegion) {
 						assetTypesWithRegions = append(assetTypesWithRegions, assetTypeAndRegion)
 					}
@@ -207,7 +209,7 @@ func CreatePulumiNodes(events []engine.Event, logger *zerolog.Logger, config *co
 				kinds = append(kinds, kind)
 			}
 
-			if !helpers.StringSliceContains(assetTypesWithRegions,  node.ObjectType) {
+			if !helpers.StringSliceContains(assetTypesWithRegions, node.ObjectType) {
 				assetTypesWithRegions = append(assetTypesWithRegions, node.ObjectType)
 			}
 			k8sNodes = append(k8sNodes, node)
@@ -442,7 +444,7 @@ func buildAtrs(awsIntegrationId, k8sIntegrationId string, assetTypesWithRegions 
 		if strings.HasPrefix(assetTypesWithRegion, "aws") && len(awsIntegrationId) > 0 {
 			atr = fmt.Sprintf("%s-%s", awsIntegrationId, assetTypesWithRegion)
 			atrs = append(atrs, atr)
-		} else  if strings.HasPrefix(assetTypesWithRegion, "kubernetes") && len(k8sIntegrationId) > 0 {
+		} else if strings.HasPrefix(assetTypesWithRegion, "kubernetes") && len(k8sIntegrationId) > 0 {
 			atr = fmt.Sprintf("%s-%s", k8sIntegrationId, assetTypesWithRegion)
 			atrs = append(atrs, atr)
 		}

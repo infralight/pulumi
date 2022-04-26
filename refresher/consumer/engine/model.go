@@ -31,4 +31,6 @@ type PulumiIacMetadata struct {
 	PulumiType       string                   `json:"pulumiType"`
 	PulumiState      string                   `json:"pulumiState"`
 	PulumiDrifts     []map[string]interface{} `json:"pulumiDrifts"`
+	VcsRepo          string                   `json:"vcsRepo"`
+	VcsProvider      string                   `json:"vcsProvider"`
 }
