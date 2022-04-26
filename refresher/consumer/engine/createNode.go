@@ -8,9 +8,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func CreateS3Node(events []engine.Event,  logger *zerolog.Logger, config *config.Config, consumer *common.Consumer) ([]map[string]interface{},[]string, error) {
+func CreateS3Node(events []engine.Event, logger *zerolog.Logger, config *config.Config, consumer *common.Consumer, vcsData map[string]interface{}) ([]map[string]interface{}, []string, error) {
 
-	nodes, assetTypesWithRegions, err := CreatePulumiNodes(events, logger, config, consumer)
+	nodes, assetTypesWithRegions, err := CreatePulumiNodes(events, logger, config, consumer, vcsData)
 	if err != nil {
 		logger.Err(err).Msg("failed to create pulumi Nodes")
 		return nil, nil, err
@@ -31,7 +31,6 @@ func CreateS3Node(events []engine.Event,  logger *zerolog.Logger, config *config
 		s3Node["attributes"] = node.Attributes
 		s3Node["name"] = node.Name
 		s3Node["assetId"] = node.AssetId
-
 
 		if node.ProviderAccountId != "" {
 			s3Node["providerAccountId"] = node.ProviderAccountId

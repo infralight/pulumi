@@ -7,11 +7,13 @@ import (
 	"github.com/infralight/pulumi/refresher"
 	"github.com/infralight/pulumi/refresher/common"
 	"github.com/infralight/pulumi/refresher/utils"
+	"github.com/pulumi/pulumi/pkg/v3/backend"
 	"github.com/pulumi/pulumi/pkg/v3/backend/httpstate"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/rs/zerolog"
 	"github.com/thoas/go-funk"
+	"strings"
 )
 
 const (
@@ -55,6 +57,14 @@ func PulumiMapper(
 		logger.Err(err).Msg("failed getting stack")
 		return consumer.MongoDb.UpdateStateFileDeleted(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
+
+	stackTags, err := backend.GetMergedStackTags(ctx, stack)
+	if err != nil {
+		logger.Warn().Msg(fmt.Sprintf("failed getting stack tags %s", err))
+	}
+
+	vcsData := getVcsData(stackTags)
+
 	updateOpts := client.GetUpdateOpts()
 
 	dryRunApplierOpts := client.GetDryRunApplierOpts()
@@ -73,11 +83,11 @@ func PulumiMapper(
 		}
 	}()
 
-	_, _, res := httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
+	_, _, response := httpCloudBackend.Apply(ctx, apitype.RefreshUpdate, stack, *updateOpts, *dryRunApplierOpts, eventsChannel)
 	close(eventsChannel)
 
-	if res != nil && len(events) == 0 {
-		logger.Err(res.Error()).Msg("failed running pulumi preview")
+	if response != nil && len(events) == 0 {
+		logger.Err(response.Error()).Msg("failed running pulumi preview")
 		return consumer.MongoDb.UpdateStateFileDeleted(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
 
@@ -90,7 +100,7 @@ func PulumiMapper(
 		logger.Info().Msg("found empty state file")
 		return consumer.MongoDb.UpdateEmptyStateFile(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
-	nodes, atrsToTrigger, err := CreateS3Node(events, logger, consumer.Config, consumer)
+	nodes, atrsToTrigger, err := CreateS3Node(events, logger, consumer.Config, consumer, vcsData)
 	if err != nil {
 		logger.Err(err).Msg("failed to create s3 nodes")
 		return err
@@ -144,4 +154,20 @@ func PulumiMapper(
 
 	logger.Info().Msg("Successfully triggered engine producer from dynamodb")
 	return nil
+}
+
+func getVcsData(tags map[apitype.StackTagName]string) map[string]interface{} {
+	var vcsData = make(map[string]interface{})
+	vcsData["vcsRepo"] = ""
+	vcsData["vcsProvider"] = ""
+	if val, ok := tags["vcs:kind"]; ok {
+		kindParts := strings.Split(val, ".")
+		vcsData["vcsProvider"] = kindParts[0]
+	}
+	if vcsOwner, ok := tags["vcs:owner"]; ok {
+		if vcsRepo, repoExists := tags["vcs:repo"]; repoExists {
+			vcsData["vcsRepo"] = fmt.Sprintf("%s/%s", vcsOwner, vcsRepo)
+		}
+	}
+	return vcsData
 }
