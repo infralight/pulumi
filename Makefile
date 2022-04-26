@@ -22,7 +22,7 @@ SHELL = /usr/bin/env bash -o pipefail
 all: build
 
 fmt: ## Run go fmt against code.
-	go fmt ./...
+	cd refresher && go fmt ./...
 
 build: fmt
 	go build -o bin/opa-calculator main.go
