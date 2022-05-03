@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/go-multierror"
+	"github.com/infralight/go-kit/helpers"
 	"github.com/pulumi/pulumi/pkg/v3/engine"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 )
 
-func CalcDrift(step engine.StepEventMetadata) ([]map[string]interface{} , error){
+func CalcDrift(step engine.StepEventMetadata) ([]map[string]interface{}, error) {
 	var merr *multierror.Error
 
 	var drifts []map[string]interface{}
@@ -29,7 +30,7 @@ func CalcDrift(step engine.StepEventMetadata) ([]map[string]interface{} , error)
 				var providerValue string
 
 				if providerType != "string" {
-					providerJson, err := json.Marshal( val.New.Mappable())
+					providerJson, err := json.Marshal(val.New.Mappable())
 					if err != nil {
 						merr = multierror.Append(merr, err)
 						continue
@@ -43,7 +44,7 @@ func CalcDrift(step engine.StepEventMetadata) ([]map[string]interface{} , error)
 				var iacValue string
 
 				if iacType != "string" {
-					iacJson, err := json.Marshal( val.Old.Mappable())
+					iacJson, err := json.Marshal(val.Old.Mappable())
 					if err != nil {
 						merr = multierror.Append(merr, err)
 						continue
@@ -61,15 +62,21 @@ func CalcDrift(step engine.StepEventMetadata) ([]map[string]interface{} , error)
 
 			}
 			for key, val := range outputDiff.Adds {
-				drifts = append(drifts, map[string]interface{}{
-					"keyName":       key,
-					"providerValue": "undefined",
-					"iacValue":      fmt.Sprintf("%v", val.Mappable()),
-				})
-
+				if !isEmpty(val.String()) {
+					drifts = append(drifts, map[string]interface{}{
+						"keyName":       key,
+						"providerValue": "undefined",
+						"iacValue":      fmt.Sprintf("%v", val.Mappable()),
+					})
+				}
 			}
 		}
 	}
 	return drifts, nil
 
+}
+
+func isEmpty(s string) bool {
+	emptyValeus := []string{"{[]}", "", "[]", "{}", "map[]"}
+	return helpers.StringSliceContains(emptyValeus, s)
 }
