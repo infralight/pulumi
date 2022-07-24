@@ -311,7 +311,7 @@ func getIacAttributes(outputs resource.PropertyMap) string {
 
 func buildK8sArns(k8sNodes []PulumiNode, uids, kinds []string, logger *zerolog.Logger, consumer *common.Consumer, k8sIntegrations []mongo.K8sIntegration) ([]PulumiNode, string, error) {
 	var clusterId string
-	integrationIds, err := utils.GetK8sIntegrationIds(consumer.Config.AccountId, uids, kinds, logger)
+	integrationIds, err := utils.GetK8sIntegrationIds(consumer.Config.AccountId, uids, kinds, consumer.ES, logger)
 	if err != nil || len(integrationIds) == 0 {
 		logger.Err(err).Msg("failed to get k8s integration")
 		clusterId = "K8sCluster"
