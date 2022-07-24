@@ -100,7 +100,7 @@ func PulumiMapper(
 		logger.Info().Msg("found empty state file")
 		return consumer.MongoDb.UpdateEmptyStateFile(ctx, consumer.Config.AccountId, consumer.Config.StackId)
 	}
-	nodes, atrsToTrigger, err := CreateS3Node(events, logger, consumer.Config, consumer, vcsData)
+	nodes, atrsToTrigger, arns, err := CreateS3Node(events, logger, consumer.Config, consumer, vcsData)
 	if err != nil {
 		logger.Err(err).Msg("failed to create s3 nodes")
 		return err
@@ -115,8 +115,12 @@ func PulumiMapper(
 		return err
 	}
 
-	s3Path := fmt.Sprintf("%s/pulumi_resources/%s/iac_objects.jsonl", cfg.AccountId, cfg.StackId)
+	err = consumer.ES.DeleteIacAssets(fmt.Sprintf("iac-%s" ,cfg.AccountId), cfg.AccountId, cfg.PulumiIntegrationId, cfg.StackId, arns)
+	if err != nil {
+		logger.Err(err).Msg("failed to delete from ES the deleted assets")
+	}
 
+	s3Path := fmt.Sprintf("%s/pulumi_resources/%s/iac_objects.jsonl", cfg.AccountId, cfg.StackId)
 	err = utils.WriteFile(consumer.Config, s3Path, jsonlinesNodes, "jsonl")
 	if err != nil {
 		logger.Err(err).Str("accountId", cfg.AccountId).Str("pulumiIntegrationId", cfg.PulumiIntegrationId).Str("projectName", cfg.ProjectName).
