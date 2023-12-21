@@ -162,3 +162,5 @@ require (
 )
 
 require github.com/rogpeppe/go-internal v1.8.1 // indirect
+
+replace sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67 => github.com/infralight/appdash-data v0.0.1
